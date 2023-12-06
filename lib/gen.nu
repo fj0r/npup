@@ -20,7 +20,7 @@ def gen-shell [it type] {
     }
 }
 
-def resolve-recipe [ctx name] {
+export def resolve [ctx name] {
     let vs = $ctx.data.versions
     let version = if $name in $vs { $vs | get $name } else { "" }
     let df = $ctx.defs | get $name
@@ -70,7 +70,7 @@ def gen-recipe-env [ctx] {
 use download.nu
 def gen-recipe [ctx] {
     $ctx.args
-    | each {|i| resolve-recipe $ctx $i }
+    | each {|i| resolve $ctx $i }
     | flatten
     | each {|i|
         match $i.type {

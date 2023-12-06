@@ -7,7 +7,12 @@ def extract [input act args?] {
             $"($args)($input)"
         }
         index => {
-            $input | get $args
+            let r = do -i { $input | get $args }
+            if ($r | is-empty) {
+                error make { msg: $"'($args)' not in ($input)" }
+            } else {
+                $r
+            }
         }
         field => {
             if ($args | is-empty) {

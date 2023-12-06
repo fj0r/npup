@@ -81,7 +81,7 @@ def download-recipe [defs versions --cache:string] {
         data: { versions: $versions }
         cache: $cache
     }
-    for y in ($defs | columns | each {|x| resolve-recipe $ctx $x }) {
+    for y in ($defs | columns | each {|x| gen resolve $ctx $x }) {
         for i in $y {
             if $i.type == 'download' {
                 if ($i.url? | is-empty) {
