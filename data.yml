@@ -13,7 +13,7 @@ versions:
   spin: 2.0.1
   dust: 0.8.6
   nodejs: 20.10.0
-  wstunnel: 8.1.1
+  wstunnel: 8.2.1
   rust-analyzer: 2023-12-04
   lsp-lua: 3.7.3
   haskell-language-server: 2.5.0.0

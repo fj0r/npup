@@ -66,7 +66,7 @@ def update-version [manifest] {
             $header | transpose k v | each {|x| [-H $"($x.k): ($x.v)"] } | flatten
         }
         if ($url | not-empty) {
-            let ver = (extractors run (curl -sSL $header $url) $ext)
+            let ver = (extractor run (curl -sSL $header $url) $ext)
             print $ver
             $data = ($data | upsert $item.k $ver)
         }

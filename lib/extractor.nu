@@ -34,7 +34,7 @@ def extract [input act args?] {
                 {field: 'tag_name'}
                 {trim: null }
                 {only-nums: null} ]
-            run-extractors ($input | from json) $ex
+            run ($input | from json) $ex
         }
     }
 }
