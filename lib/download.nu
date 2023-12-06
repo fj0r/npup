@@ -1,4 +1,4 @@
-def resolve-download-filename [ctx] {
+export def resolve [ctx] {
     let ver = $ctx.version
     let name = $ctx.name
     let fn = $ctx.filename?
@@ -142,7 +142,7 @@ export def gen [ctx] {
     if ($ctx.url? | is-empty) {
         mkact log $ctx.name { event: "not found" }
     } else {
-        let x = resolve-download-filename $ctx
+        let x = resolve $ctx
         let f = resolve-download-getter $ctx $x $cache
         let cx = $ctx | merge {
             file: $x.file

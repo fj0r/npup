@@ -4,6 +4,7 @@ use ./lib/deps.nu
 use ./lib/gen.nu
 use ./lib/interpret.nu
 use ./lib/extractor.nu
+use ./lib/download.nu
 
 
 def setup [
@@ -87,7 +88,7 @@ def download-recipe [defs versions --cache:string] {
                 if ($i.url? | is-empty) {
                     print $'# ($i.name)'
                 } else {
-                    let x = resolve-download-filename $i
+                    let x = download resolve $i
                     print $'# download ($x.file)'
                     let t = [$cache $x.file] | filter {|x| $x | not-empty } | path join
                     if ($cache | find -r '^https?://' | is-empty) {
