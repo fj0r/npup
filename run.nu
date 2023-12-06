@@ -75,7 +75,7 @@ def update-version [manifest] {
 }
 
 def download-recipe [defs versions --cache:string] {
-    mkdir /tmp/npkg
+    mkdir /tmp/npup
     let ctx = {
         defs: $defs
         data: { versions: $versions }
@@ -93,7 +93,7 @@ def download-recipe [defs versions --cache:string] {
                     if ($cache | find -r '^https?://' | is-empty) {
                         wget -c ($x.url) -O ($t)
                     } else {
-                        let lt = ['/tmp/npkg' $x.file] | path join
+                        let lt = ['/tmp/npup' $x.file] | path join
                         wget -c ($x.url) -O ($lt)
                         curl -T ($lt) ($t)
                     }
@@ -101,7 +101,7 @@ def download-recipe [defs versions --cache:string] {
             }
         }
     }
-    rm -rf /tmp/npkg
+    rm -rf /tmp/npup
 }
 
 export def main [

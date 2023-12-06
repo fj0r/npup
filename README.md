@@ -3,8 +3,8 @@
 ## Features
 - the metadata declaration in a separate `manifest.yml`
 - declares dependency in `pkgs` fields
-    - require: other npkg
-    - use: npkg for build phase
+    - require: other npup
+    - use: npup for build phase
     - include: os, defs, pip, npm, cargo, etc
 - custom package declaration in `defs` field
     - update version number in `data.yml '
@@ -16,36 +16,36 @@
 
 update version of asset that need to download
 ```sh
-npkg update
+npup update
 ```
 
 download asset and upload
 ```
-npkg download --cache http://file.s/npkg
+npup download --cache http://file.s/npup
 ```
 
 generate sh script
 ```sh
-npkg gensh 'debian' --clean nu nvim exec http
+npup gensh 'debian' --clean nu nvim exec http
 ```
 
 execute script
 ```sh
-npkg setup --clean nu nvim exec http
+npup setup --clean nu nvim exec http
 ```
 
 ## Purpose
 
 the original purpose was to replace the shell script in `Dockerfile`, because shell script was unstructured. it can also be used to manage the operating system.
 
-it is still generating shell scripts, which has the advantage of placing scripts and assets on the http site, then you can setup system through curl without nushell, like `curl http://npkg-site/setup/a,b,c,d | sh` . by adding similar configurations to openresty
+it is still generating shell scripts, which has the advantage of placing scripts and assets on the http site, then you can setup system through curl without nushell, like `curl http://npup-site/setup/a,b,c,d | sh` . by adding similar configurations to openresty
 ```
 location ~ /setup/(.*) {
     set $target $1;
     content_by_lua_block {
         local shell = require "resty.shell"
         local host = ngx.var.scheme.."://".. ngx.var.http_host
-        local cmd = 'nu npkg.nu setup --config ' .. host
+        local cmd = 'nu npup.nu setup --config ' .. host
         local ok, stdout, stderr, reason, status = shell.run(cmd..ngx.var.target, nil, 3000, 409600)
         if ok then
             ngx.say(stdout)
