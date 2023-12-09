@@ -1,4 +1,4 @@
-export def resolve [ctx] {
+export def resolve-version [ctx] {
     let ver = $ctx.version
     let name = $ctx.name
     let fn = $ctx.filename?
@@ -8,19 +8,19 @@ export def resolve [ctx] {
     let workdir = if ($ctx.workdir? | is-empty) { null } else {
         $ctx.workdir | resolve-filename $name $ver
     }
-    { url: $url, file: $file, workdir: $workdir }
+    $ctx | merge { url: $url, file: $file, workdir: $workdir }
 }
 
-def resolve-download-getter [ctx x cache] {
-    if ($cache | is-empty) {
-        mkact 'download' $ctx.name { url: $x.url target: $x.file}
+def resolve-download-getter [ctx] {
+    if ($ctx.cache | is-empty) {
+        mkact 'download' $ctx.name { url: $ctx.url target: $ctx.file}
     } else {
-        let f = [$cache $x.file] | path join
+        let f = [$ctx.cache $ctx.file] | path join
         let a = mkact 'download' $ctx.name {
                 url: $f
-                target: $x.file
+                target: $ctx.file
             }
-        if ($cache | find -r '^https?://' | is-empty) {
+        if ($ctx.cache | find -r '^https?://' | is-empty) {
             $a | upsert cache true
         } else { $a }
     }
@@ -136,18 +136,110 @@ def resolve-unzip [getter ctx] {
     }
 }
 
+
+
+# url cat curl wget
+# fmt tar.gz gz zip
+# intermediate mktemp cd
+def resolve-getter [$ctx] {
+    if ($ctx.cache | is-empty) {
+        { url: $ctx.url target: $ctx.file local: false}
+    } else {
+        let f = [$ctx.cache $ctx.file] | path join
+        let a = {
+                url: $f
+                target: $ctx.file
+                local: false
+            }
+        if ($ctx.cache | find -r '^https?://' | is-empty) {
+            $a | upsert local true
+        } else { $a }
+    }
+}
+
+def resolve-format [$ctx] {
+    let fmt = if ($ctx.format? | not-empty ) { $ctx.format } else {
+        let fn = $ctx.file | split row '.'
+        let zf = $fn | last
+        if ($fn | range (-2..-2) | get 0) == 'tar' {
+            $"tar.($zf)"
+        } else {
+            $zf
+        }
+    }
+    let decmp = match $fmt {
+        'tar.gz'  => $"tar zxf"
+        'tar.zst' => $"zstd -d -T0 | tar xf"
+        'tar.bz2' => $"tar jxf"
+        'tar.xz'  => $"tar Jxf"
+        'gz'      => $"gzip -d"
+        'zst'     => $"zstd -d"
+        'bz2'     => $"bzip2 -d"
+        'xz'      => $"xz -d"
+        'zip'     => $"unzip"
+        _ => "(!unknown format)"
+    }
+    let target = [$ctx.target $ctx.wrap?]
+        | filter {|x| $x | not-empty }
+        | path join
+    let target = if $fmt == 'zip' {
+        $ctx.file
+    } else if not ($fmt | str starts-with 'tar.') {
+        let n = if ($ctx.filter? | is-empty) { $ctx.name } else { $ctx.filter | first }
+        [$target $n] | path join
+    } else {
+        $target
+    }
+    {
+        decmp: $decmp
+        workdir: $ctx.workdir?
+        target: $target
+        strip: $ctx.strip?
+    }
+}
+
+def resolve-filter [$ctx] {
+    mut rename = []
+    mut lst = []
+    let filters = if ($ctx.filter? | is-empty) { [] } else { $ctx.filter }
+    for x in $filters {
+        if ($x | describe -d | get type) == 'record' {
+            let tf = $x.file | resolve-filename $ctx.name $ctx.version
+            let fn = $tf | split row '/' | last
+            let nf = $x.rename | resolve-filename $ctx.name $ctx.version
+            let trg = if ($ctx.workdir | is-empty) { $ctx.target } else { $ctx.workdir }
+            $lst ++= [$tf]
+            $rename ++= [[$'($trg)/($fn)', $'($ctx.target)/($nf)']]
+        } else {
+            let r = $x | resolve-filename $ctx.name $ctx.version
+            $lst ++= [$r]
+        }
+    }
+    {
+        filter: $lst
+        rename: $rename
+    }
+}
+
 export def gen [ctx] {
-    let cache = $ctx.cache?
     let target = $ctx.target?
     if ($ctx.url? | is-empty) {
         mkact log $ctx.name { event: "not found" }
     } else {
-        let x = resolve $ctx
-        let f = resolve-download-getter $ctx $x $cache
+        let x = resolve-version $ctx
+
+    (
+        resolve-getter $x
+        | merge (resolve-format $x)
+        | merge (resolve-filter $x)
+        | log $'resolve ($x.name)'
+    )
+
+        let f = resolve-download-getter $x
         let cx = $ctx | merge {
             file: $x.file
-            cache: $cache
-            target: $target
+            cache: $x.cache
+            target: $x.target
             workdir: $x.workdir
         }
         let r = resolve-unzip $f $cx
