@@ -11,6 +11,8 @@ export def resolve-version [ctx] {
     $ctx | merge { url: $url, file: $file, workdir: $workdir }
 }
 
+
+# TODO: delete
 def resolve-download-getter [ctx] {
     if ($ctx.cache | is-empty) {
         mkact 'download' $ctx.name { url: $ctx.url target: $ctx.file}
@@ -26,6 +28,7 @@ def resolve-download-getter [ctx] {
     }
 }
 
+# TODO: delete
 def resolve-tar-filter [workdir filter target name version] {
     if ($filter | is-empty) { [] } else {
         $filter
@@ -44,6 +47,7 @@ def resolve-tar-filter [workdir filter target name version] {
     }
 }
 
+# TODO: delete
 def resolve-zip-filter [workdir filter target name version strip] {
     let nl = (char newline)
     let strip = if ($strip | is-empty) { 0 } else { $strip }
@@ -64,6 +68,7 @@ def resolve-zip-filter [workdir filter target name version strip] {
     }
 }
 
+# TODO: delete
 def resolve-unzip [getter ctx] {
     let trg = [$ctx.target $ctx.wrap?]
         | filter {|x| $x | not-empty }
@@ -137,10 +142,6 @@ def resolve-unzip [getter ctx] {
 }
 
 
-
-# url cat curl wget
-# fmt tar.gz gz zip
-# intermediate mktemp cd
 def resolve-getter [$ctx] {
     if ($ctx.cache | is-empty) {
         { url: $ctx.url target: $ctx.file local: false}
@@ -179,12 +180,14 @@ def resolve-format [$ctx] {
         'zip'     => $"unzip"
         _ => "(!unknown format)"
     }
+    mut override = false
     let target = [$ctx.target $ctx.wrap?]
         | filter {|x| $x | not-empty }
         | path join
     let target = if $fmt == 'zip' {
         $ctx.file
     } else if not ($fmt | str starts-with 'tar.') {
+        $override = true
         let n = if ($ctx.filter? | is-empty) { $ctx.name } else { $ctx.filter | first }
         [$target $n] | path join
     } else {
@@ -195,6 +198,7 @@ def resolve-format [$ctx] {
         workdir: $ctx.workdir?
         target: $target
         strip: $ctx.strip?
+        override: $override
     }
 }
 
@@ -228,22 +232,16 @@ export def gen [ctx] {
     } else {
         let x = resolve-version $ctx
 
-    (
-        resolve-getter $x
-        | merge (resolve-format $x)
-        | merge (resolve-filter $x)
-        | log $'resolve ($x.name)'
-    )
+        let act = mkact 'download' $ctx.name (
+            resolve-getter $x
+            | merge (resolve-format $x)
+            | merge (resolve-filter $x)
+        )
 
-        let f = resolve-download-getter $x
-        let cx = $ctx | merge {
-            file: $x.file
-            cache: $x.cache
-            target: $x.target
-            workdir: $x.workdir
+        let mt = if ($act.workdir? | is-empty) { mkact 'dumb' null {} } else {
+            mkact 'mkdir' $ctx.name { target: $act.workdir, temp: true }
         }
-        let r = resolve-unzip $f $cx
-        $r
+
+        [$mt $act]
     }
 }
-
