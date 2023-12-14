@@ -11,137 +11,6 @@ export def resolve-version [ctx] {
     $ctx | merge { url: $url, file: $file, workdir: $workdir }
 }
 
-
-# TODO: delete
-def resolve-download-getter [ctx] {
-    if ($ctx.cache | is-empty) {
-        mkact 'download' $ctx.name { url: $ctx.url target: $ctx.file}
-    } else {
-        let f = [$ctx.cache $ctx.file] | path join
-        let a = mkact 'download' $ctx.name {
-                url: $f
-                target: $ctx.file
-            }
-        if ($ctx.cache | find -r '^https?://' | is-empty) {
-            $a | upsert cache true
-        } else { $a }
-    }
-}
-
-# TODO: delete
-def resolve-tar-filter [workdir filter target name version] {
-    if ($filter | is-empty) { [] } else {
-        $filter
-        | each {|x|
-            if ($x | describe -d | get type) == 'record' {
-                let tf = $x.file | resolve-filename $name $version
-                let fn = $tf | split row '/' | last
-                let nf = $x.rename | resolve-filename $name $version
-                let trg = if ($workdir | is-empty) { $target } else { $workdir }
-                [$tf $'($trg)/($fn)' $'($target)/($nf)']
-            } else {
-                let r = $x | resolve-filename $name $version
-                [$r]
-            }
-        }
-    }
-}
-
-# TODO: delete
-def resolve-zip-filter [workdir filter target name version strip] {
-    let nl = (char newline)
-    let strip = if ($strip | is-empty) { 0 } else { $strip }
-    if ($filter | is-empty) {
-        [mkact mv null { from: $"${temp_dir}/*" to: $target }]
-    } else {
-        $filter
-        | each {|x|
-            if ($x | describe -d | get type) == 'record' {
-                mkact mv null {from: $"${temp_dir}/($x.file)" to: $"($target)/($x.rename)"}
-
-            } else {
-                let f = $x | resolve-filename $name $version
-                let t = $f | split row '/' | range $strip.. | str join '/'
-                mkact mv null {from: $"($workdir)/($f)" to: $"($target)/($t)" }
-            }
-        }
-    }
-}
-
-# TODO: delete
-def resolve-unzip [getter ctx] {
-    let trg = [$ctx.target $ctx.wrap?]
-        | filter {|x| $x | not-empty }
-        | path join
-    let fmt = if ($ctx.format? | not-empty ) { $ctx.format } else {
-        let fn = $ctx.file | split row '.'
-        let zf = $fn | last
-        if ($fn | range (-2..-2) | get 0) == 'tar' {
-            $"tar.($zf)"
-        } else {
-            $zf
-        }
-    }
-    let decmp = match $fmt {
-        'tar.gz'  => $"tar zxf"
-        'tar.zst' => $"zstd -d -T0 | tar xf"
-        'tar.bz2' => $"tar jxf"
-        'tar.xz'  => $"tar Jxf"
-        'gz'      => $"gzip -d"
-        'zst'     => $"zstd -d"
-        'bz2'     => $"bzip2 -d"
-        'xz'      => $"xz -d"
-        'zip'     => $"unzip"
-        _ => "(!unknown format)"
-    }
-
-    let md = mkact 'mkdir' $ctx.name { target: $trg temp: false }
-    let mt = if ($ctx.workdir? | is-empty) { mkact 'dumb' null {} } else {
-        mkact 'mkdir' $ctx.name { target: $ctx.workdir temp: true }
-    }
-    if ($fmt | str starts-with 'tar.') {
-        let f = (resolve-tar-filter $ctx.workdir $ctx.filter? $trg $ctx.name $ctx.version?)
-            | reduce -f {fs: [], mv: []} {|x, acc|
-                let acc = if ($x.0? | is-empty) { $acc } else {
-                    $acc | update fs ($acc.fs | append $x.0?)
-                }
-                let acc = if ($x.1? | is-empty) { $acc } else {
-                    $acc | update mv ($acc.mv | append (mkact mv null {from: $x.1 to: $x.2}))
-                }
-                $acc
-            }
-        let u = $getter | merge {
-            decompress: $decmp
-            target: $trg
-            strip: $ctx.strip?
-            filter: $f.fs
-            workdir: $ctx.workdir?
-        }
-        [$md $mt $u] | append $f.mv
-    } else if $fmt == 'zip' {
-        if ($ctx.workdir? | is-empty) {
-            mkact log $ctx.workdir { event: "workdir should not empty" }
-        }
-        let f = (resolve-zip-filter $ctx.workdir $ctx.filter? $trg $ctx.name $ctx.version? $ctx.strip?)
-        let u = $getter | merge {
-            decompress: $decmp
-            target: $ctx.file
-            workdir: $ctx.workdir
-        }
-        [$md $mt $u] | append $f
-    } else {
-        let n = if ($ctx.filter? | is-empty) { $ctx.name } else { $ctx.filter | first }
-        let t = [$trg $n] | path join
-        let u = $getter | merge {
-            decompress: $decmp
-            target: $t
-            redirect: true
-        }
-        [$md $mt $u]
-    }
-}
-
-
 def resolve-getter [$ctx] {
     if ($ctx.cache | is-empty) {
         { url: $ctx.url target: $ctx.file local: false}
@@ -238,10 +107,15 @@ export def gen [ctx] {
             | merge (resolve-filter $x)
         )
 
+        # TODO: conditional
+        let md = if ($act.override and ($act.workdir? | is-empty)) { mkact 'dumb' null {} } else {
+            mkact 'mkdir' $ctx.name { target: $act.target temp: false }
+        }
+
         let mt = if ($act.workdir? | is-empty) { mkact 'dumb' null {} } else {
             mkact 'mkdir' $ctx.name { target: $act.workdir, temp: true }
         }
 
-        [$mt $act]
+        [$md $mt $act]
     }
 }
