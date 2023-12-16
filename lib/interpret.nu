@@ -71,6 +71,11 @@ def interpret-recipe [act] {
                        ] | str join (char newline)
                   }
         download: {|x|
+                        let rn = if ($x.rename? | is-empty) { [] } else {
+                            $x.rename
+                            | each {|r| $"mv ($r.0) ($r.1)"}
+                            | str join (char newline)
+                        }
                         if ($x.workdir? | not-empty) {
                             let f = if $x.local {
                                 $'cp ($x.url) ($x.workdir)'
@@ -82,7 +87,6 @@ def interpret-recipe [act] {
                                 $f
                                 $"($x.decmp) ($x.target)"
                             ]
-                            | str join (char newline)
                         } else {
                             let s = if ($x.strip | is-empty) {
                                     []
@@ -104,14 +108,10 @@ def interpret-recipe [act] {
                                 ...$f
                             ]
                             | str join ' '
-
-                            if ($x.rename? | is-empty) { $r } else {
-                                [
-                                    $r
-                                    ...($x.rename | each {|r| $"mv ($r.0) ($r.1)"})
-                                ] | str join (char newline)
-                            }
+                            [$r]
                         }
+                        | append $rn
+                        | str join (char newline)
                   }
     }
     if ($act in $default) {

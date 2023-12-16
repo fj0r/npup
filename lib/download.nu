@@ -11,14 +11,21 @@ export def resolve-version [ctx] {
     $ctx | merge { url: $url, file: $file, workdir: $workdir }
 }
 
-def resolve-getter [$ctx] {
+def resolve-wrap [] {
+    let ctx = $in
+    let target = [$ctx.target $ctx.wrap?]
+        | filter {|x| $x | not-empty }
+        | path join
+    $ctx | update target $target
+}
+
+def resolve-getter [ctx] {
     if ($ctx.cache | is-empty) {
-        { url: $ctx.url target: $ctx.file local: false}
+        { url: $ctx.url local: false}
     } else {
         let f = [$ctx.cache $ctx.file] | path join
         let a = {
                 url: $f
-                target: $ctx.file
                 local: false
             }
         if ($ctx.cache | find -r '^https?://' | is-empty) {
@@ -27,7 +34,7 @@ def resolve-getter [$ctx] {
     }
 }
 
-def resolve-format [$ctx] {
+def resolve-format [ctx] {
     let fmt = if ($ctx.format? | not-empty ) { $ctx.format } else {
         let fn = $ctx.file | split row '.'
         let zf = $fn | last
@@ -50,17 +57,14 @@ def resolve-format [$ctx] {
         _ => "(!unknown format)"
     }
     mut override = false
-    let target = [$ctx.target $ctx.wrap?]
-        | filter {|x| $x | not-empty }
-        | path join
     let target = if $fmt == 'zip' {
         $ctx.file
     } else if not ($fmt | str starts-with 'tar.') {
         $override = true
         let n = if ($ctx.filter? | is-empty) { $ctx.name } else { $ctx.filter | first }
-        [$target $n] | path join
+        [$ctx.target $n] | path join
     } else {
-        $target
+        $ctx.target
     }
     {
         decmp: $decmp
@@ -71,18 +75,17 @@ def resolve-format [$ctx] {
     }
 }
 
-def resolve-filter [$ctx] {
+def resolve-filter [ctx] {
     mut rename = []
     mut lst = []
     let filters = if ($ctx.filter? | is-empty) { [] } else { $ctx.filter }
     for x in $filters {
         if ($x | describe -d | get type) == 'record' {
             let tf = $x.file | resolve-filename $ctx.name $ctx.version
-            let fn = $tf | split row '/' | last
             let nf = $x.rename | resolve-filename $ctx.name $ctx.version
             let trg = if ($ctx.workdir | is-empty) { $ctx.target } else { $ctx.workdir }
             $lst ++= [$tf]
-            $rename ++= [[$'($trg)/($fn)', $'($ctx.target)/($nf)']]
+            $rename ++= [[$'($trg)/($tf)', $'($ctx.target)/($nf)']]
         } else {
             let r = $x | resolve-filename $ctx.name $ctx.version
             $lst ++= [$r]
@@ -99,16 +102,17 @@ export def gen [ctx] {
     if ($ctx.url? | is-empty) {
         mkact log $ctx.name { event: "not found" }
     } else {
-        let x = resolve-version $ctx
+        let x = resolve-version $ctx | resolve-wrap
 
-        let act = mkact 'download' $ctx.name (
-            resolve-getter $x
-            | merge (resolve-format $x)
-            | merge (resolve-filter $x)
-        )
+        let act = mkact 'download' $ctx.name {
+            ...(resolve-getter $x)
+            ...(resolve-format $x)
+            ...(resolve-filter $x)
+        }
 
-        # TODO: conditional
-        let md = if ($act.override and ($act.workdir? | is-empty)) { mkact 'dumb' null {} } else {
+        let md = if ($act.override or ($act.workdir? | not-empty)) {
+            mkact 'dumb' null {}
+        } else {
             mkact 'mkdir' $ctx.name { target: $act.target temp: false }
         }
 
