@@ -71,35 +71,47 @@ def interpret-recipe [act] {
                        ] | str join (char newline)
                   }
         download: {|x|
+                        let rn = if ($x.rename? | is-empty) { [] } else {
+                            $x.rename
+                            | each {|r| $"mv ($r.0) ($r.1)"}
+                            | str join (char newline)
+                        }
                         if ($x.workdir? | not-empty) {
-                            # zip
-                            let f = if ($x.cache? | is-empty) {
-                                $'wget -c ($x.url) -O ($x.target)'
+                            let f = if $x.local {
+                                $'cp ($x.url) ($x.workdir)'
                             } else {
-                                $'cp ($x.url) ($x.target)'
+                                $'wget -c ($x.url) -O ($x.workdir)'
                             }
                             [
-                            $"cd ($x.workdir)"
-                            $f
-                            $"($x.decompress) ($x.target)"
+                                $"cd ($x.workdir)"
+                                $f
+                                $"($x.decmp) ($x.target)"
                             ]
-                            | str join (char newline)
-                        } else if ($x.redirect? | not-empty) {
-                            # xx -d
-                            let f = if ($x.cache? | is-empty) { 'curl -sSL' } else { 'cat' }
-                            $"($f) ($x.url) | ($x.decompress) > ($x.target)"
                         } else {
-                            # tar
-                            let f = if ($x.cache? | is-empty) { 'curl -sSL' } else { 'cat' }
-                            let c = $"-C ($x.target)"
-                            let s = if ($x.strip? | is-empty) { '' } else {
-                                $"--strip-components=($x.strip)"
+                            let s = if ($x.strip | is-empty) {
+                                    []
+                                } else {
+                                    [ $'--strip-components=($x.strip)' ]
+                                }
+                            let o = if $x.override {
+                                [">"]
+                            } else {
+                                ['-' ...$s '-C']
                             }
-                            let o = $x.filter | str join ' '
-                            [$f $x.url '|' $x.decompress '-' $s $c $o]
-                            | filter {|x| $x | not-empty }
+                            let f = if $x.override { [] } else { $x.filter }
+                            let r = [
+                                $"curl -sSL ($x.url)"
+                                '|'
+                                $x.decmp
+                                ...$o
+                                $x.target
+                                ...$f
+                            ]
                             | str join ' '
+                            [$r]
                         }
+                        | append $rn
+                        | str join (char newline)
                   }
     }
     if ($act in $default) {

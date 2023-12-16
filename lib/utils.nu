@@ -59,7 +59,6 @@ export def log [title=''] {
     print $"<<<<<< ($title) >>>>>>"
     print ($o | to yaml)
     print $">>>>>> ($title) <<<<<<"
-    print $"(char newline)"
     $o
 }
 

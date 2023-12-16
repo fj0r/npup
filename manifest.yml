@@ -183,7 +183,8 @@ defs:
         wrap: bin
         strip: 1
         filter:
-        - mask-%v-x86_64-unknown-linux-musl/mask
+        - file: mask-%v-x86_64-unknown-linux-musl/mask
+          rename: mask
         workdir: /tmp/mask-%v-%t
   watchexec:
     version:

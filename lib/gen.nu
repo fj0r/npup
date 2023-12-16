@@ -96,9 +96,9 @@ def gen-cmd [ctx] {
         null
     } else if $ctx.act == 'recipe' {
         [
-            (gen-recipe-env $ctx)
-            (gen-recipe $ctx)
-        ] | flatten
+            ...(gen-recipe-env $ctx)
+            ...(gen-recipe $ctx)
+        ]
     } else {
         mkact 'common' $ctx.act { os: $ctx.os args: $ctx.args }
     }
